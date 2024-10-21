@@ -345,7 +345,7 @@ class Hyperparameters:
     sequence_length : int = 1024 # sequence length, in tokens
     num_iterations : int = 5100 # number of iterations to run
     learning_rate : float = 0.0036
-    warmup_iters : int = 0
+    warmup_iters : int = 250
     warmdown_iters : int = 1450 # number of iterations of linear warmup/warmdown for triangular or trapezoidal schedule
     weight_decay : float = 0
     # evaluation and logging hyperparams
@@ -401,41 +401,25 @@ optimizer1 = torch.optim.AdamW(raw_model.lm_head.parameters(), lr=args.learning_
 ###### shampoo
 from distributed_shampoo.distributed_shampoo import DistributedShampoo
 from distributed_shampoo.shampoo_types import AdamGraftingConfig, CommunicationDType, DDPShampooConfig
-if False:
-    optimizer2 = DistributedShampoo(
-        model.parameters(),
-        lr=0.5*args.learning_rate,
-        betas=(0.9, 0.95),
-        epsilon=1e-7,
-        weight_decay=0,
-        max_preconditioner_dim=8192,
-        precondition_frequency=100,
-        use_decoupled_weight_decay=True,
-        grafting_config=AdamGraftingConfig(
-            beta2=0.95,
-            epsilon=1e-7,
-        ),
-        distributed_config=DDPShampooConfig(
-            communication_dtype=CommunicationDType.FP32,
-            num_trainers_per_group=8,
-            communicate_params=False,
-        ),
-    )
-else:
-    optimizer2 = DistributedShampoo(
-        model.parameters(),
-        lr=0.5*args.learning_rate,
-        betas=(0.9, 0.95),
-        epsilon=1e-7,
-        weight_decay=0,
-        max_preconditioner_dim=8192,
-        precondition_frequency=100,
-        use_decoupled_weight_decay=True,
-        grafting_config=AdamGraftingConfig(
-            beta2=0.95,
-            epsilon=1e-08,
-        ),
-    )
+optimizer2 = DistributedShampoo(
+    model.parameters(),
+    lr=0.5*args.learning_rate,
+    betas=(0.95, 0.95),
+    epsilon=1e-7,
+    weight_decay=0,
+    max_preconditioner_dim=8192,
+    precondition_frequency=10,
+    use_decoupled_weight_decay=True,
+    grafting_config=AdamGraftingConfig(
+        beta2=0.95,
+        epsilon=1e-8,
+    ),
+    distributed_config=DDPShampooConfig(
+        communication_dtype=CommunicationDType.FP32,
+        num_trainers_per_group=8,
+        communicate_params=False,
+    ),
+)
 ####
 optimizers = [optimizer1, optimizer2]
 # learning rate decay scheduler (linear warmup and warmdown)
