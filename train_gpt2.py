@@ -405,7 +405,7 @@ optimizer2 = DistributedShampoo(
     model.parameters(),
     lr=0.5*args.learning_rate,
     betas=(0.95, 0.95),
-    epsilon=1e-7,
+    epsilon=1e-12,
     weight_decay=0,
     max_preconditioner_dim=8192,
     precondition_frequency=10,
