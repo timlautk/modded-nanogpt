@@ -398,8 +398,29 @@ ctx = torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16)
 # init the optimizer(s)
 optimizer1 = torch.optim.AdamW(raw_model.lm_head.parameters(), lr=args.learning_rate, betas=(0.9, 0.95),
                                weight_decay=args.weight_decay, fused=True)
-optimizer2 = Muon(raw_model.transformer.h.parameters(), lr=0.1*args.learning_rate, momentum=0.95,
-                  rank=ddp_rank, world_size=ddp_world_size)
+###### shampoo
+from distributed_shampoo.distributed_shampoo import DistributedShampoo
+from distributed_shampoo.shampoo_types import AdamGraftingConfig
+optimizer2 = DistributedShampoo(
+    model.parameters(),
+    lr=0.5*args.learning_rate,
+    betas=(0.9, 0.95),
+    epsilon=1e-7,
+    weight_decay=0,
+    max_preconditioner_dim=8192,
+    precondition_frequency=100,
+    use_decoupled_weight_decay=True,
+    grafting_config=AdamGraftingConfig(
+        beta2=0.95,
+        epsilon=1e-7,
+    ),
+    distributed_config=DDPShampooConfig(
+        communication_dtype=CommunicationDType.FP32,
+        num_trainers_per_group=8,
+        communicate_params=False,
+    ),
+)
+####
 optimizers = [optimizer1, optimizer2]
 # learning rate decay scheduler (linear warmup and warmdown)
 def get_lr(it):
