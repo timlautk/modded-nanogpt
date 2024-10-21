@@ -400,26 +400,42 @@ optimizer1 = torch.optim.AdamW(raw_model.lm_head.parameters(), lr=args.learning_
                                weight_decay=args.weight_decay, fused=True)
 ###### shampoo
 from distributed_shampoo.distributed_shampoo import DistributedShampoo
-from distributed_shampoo.shampoo_types import AdamGraftingConfig
-optimizer2 = DistributedShampoo(
-    model.parameters(),
-    lr=0.5*args.learning_rate,
-    betas=(0.9, 0.95),
-    epsilon=1e-7,
-    weight_decay=0,
-    max_preconditioner_dim=8192,
-    precondition_frequency=100,
-    use_decoupled_weight_decay=True,
-    grafting_config=AdamGraftingConfig(
-        beta2=0.95,
+from distributed_shampoo.shampoo_types import AdamGraftingConfig, CommunicationDType, DDPShampooConfig
+if False:
+    optimizer2 = DistributedShampoo(
+        model.parameters(),
+        lr=0.5*args.learning_rate,
+        betas=(0.9, 0.95),
         epsilon=1e-7,
-    ),
-    distributed_config=DDPShampooConfig(
-        communication_dtype=CommunicationDType.FP32,
-        num_trainers_per_group=8,
-        communicate_params=False,
-    ),
-)
+        weight_decay=0,
+        max_preconditioner_dim=8192,
+        precondition_frequency=100,
+        use_decoupled_weight_decay=True,
+        grafting_config=AdamGraftingConfig(
+            beta2=0.95,
+            epsilon=1e-7,
+        ),
+        distributed_config=DDPShampooConfig(
+            communication_dtype=CommunicationDType.FP32,
+            num_trainers_per_group=8,
+            communicate_params=False,
+        ),
+    )
+else:
+    optimizer2 = DistributedShampoo(
+        model.parameters(),
+        lr=0.5*args.learning_rate,
+        betas=(0.9, 0.95),
+        epsilon=1e-7,
+        weight_decay=0,
+        max_preconditioner_dim=8192,
+        precondition_frequency=100,
+        use_decoupled_weight_decay=True,
+        grafting_config=AdamGraftingConfig(
+            beta2=0.95,
+            epsilon=1e-08,
+        ),
+    )
 ####
 optimizers = [optimizer1, optimizer2]
 # learning rate decay scheduler (linear warmup and warmdown)
