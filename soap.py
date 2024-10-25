@@ -28,8 +28,6 @@ class SOAP(optim.Optimizer):
         max_precond_dim (`int`, *optional*, defaults to 10000):
             Maximum dimension of the preconditioner.
             Set to 10000, so that we exclude most common vocab sizes while including layers.
-        merge_dims (`bool`, *optional*, defaults to `False`):
-            Whether or not to merge dimensions of the preconditioner.
         normalize_grads (`bool`, *optional*, defaults to `False`):
             Whether or not to normalize gradients per layer. 
             Helps at large precondition_frequency (~100 in our experiments), 
@@ -47,7 +45,6 @@ class SOAP(optim.Optimizer):
         eps: float = 1e-8,
         precondition_frequency: int=10,
         max_precond_dim: int=10000, # 
-        merge_dims: bool = False, # Merge dimensions till the product of the dimensions is less than or equal to max_precond_dim.
         normalize_grads: bool = False,
         correct_bias: bool = True,
     ):
@@ -58,38 +55,11 @@ class SOAP(optim.Optimizer):
             "eps": eps,
             "precondition_frequency": precondition_frequency,
             "max_precond_dim": max_precond_dim,
-            "merge_dims": merge_dims,
             "normalize_grads": normalize_grads,
             "correct_bias": correct_bias,
         }
         super().__init__(params, defaults)
         
-    def merge_dims(self, grad, max_precond_dim):
-        """
-        Merges dimensions of the gradient tensor till the product of the dimensions is less than or equal to max_precond_dim.
-        """
-        shape = grad.shape
-        new_shape = []
-        
-        curr_shape = 1
-        for sh in shape:
-            temp_shape = curr_shape * sh
-            if temp_shape > max_precond_dim:
-                if curr_shape > 1:
-                    new_shape.append(curr_shape)
-                    curr_shape = sh
-                else:
-                    new_shape.append(sh)
-                    curr_shape = 1
-            else:
-                curr_shape = temp_shape
-        
-        if curr_shape > 1 or len(new_shape)==0:
-            new_shape.append(curr_shape)
-        
-        new_grad = grad.reshape(new_shape)
-        return new_grad               
-
     @torch.no_grad()
     def step(self):
         """
@@ -125,16 +95,14 @@ class SOAP(optim.Optimizer):
                         precondition_frequency=group['precondition_frequency'],
                         shampoo_beta=(group['shampoo_beta'] if group['shampoo_beta'] >= 0 else group["betas"][1]),
                         max_precond_dim=group['max_precond_dim'],
-                        merge_dims=group["merge_dims"],
                     )
                     self.update_preconditioner(grad, state,
-                                               max_precond_dim=group['max_precond_dim'],
-                                               merge_dims=group["merge_dims"])
+                                               max_precond_dim=group['max_precond_dim'])
                     continue # first step is skipped so that we never use the current gradients in the projection.
                 
                 # Projecting gradients to the eigenbases of Shampoo's preconditioner 
                 # i.e. projecting to the eigenbases of matrices in state['GG']
-                grad_projected = self.project(grad, state, merge_dims=group["merge_dims"], 
+                grad_projected = self.project(grad, state, 
                                               max_precond_dim=group['max_precond_dim'])
 
                 exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
@@ -151,7 +119,7 @@ class SOAP(optim.Optimizer):
                 
                 # Projecting the exponential moving average of gradients to the eigenbases of Shampoo's preconditioner 
                 # i.e. projecting to the eigenbases of matrices in state['GG']
-                exp_avg_projected = self.project(exp_avg, state, merge_dims=group["merge_dims"],
+                exp_avg_projected = self.project(exp_avg, state,
                                                  max_precond_dim=group['max_precond_dim'])
                 
                 step_size = group["lr"]
@@ -162,7 +130,7 @@ class SOAP(optim.Optimizer):
 
                 # Projecting back the preconditioned (by Adam) exponential moving average of gradients
                 # to the original space
-                norm_grad = self.project_back(exp_avg_projected / denom, state, merge_dims=group["merge_dims"],
+                norm_grad = self.project_back(exp_avg_projected / denom, state,
                                                  max_precond_dim=group['max_precond_dim'])
 
                 if group["normalize_grads"]:
@@ -172,20 +140,16 @@ class SOAP(optim.Optimizer):
                 
                 # Update is done after the gradient step to avoid using current gradients in the projection.
                 self.update_preconditioner(grad, state, 
-                                               max_precond_dim=group['max_precond_dim'],
-                                               merge_dims=group["merge_dims"])
+                                               max_precond_dim=group['max_precond_dim'])
         
         return loss
     
     def init_preconditioner(self, grad, state, precondition_frequency=10, 
-                            shampoo_beta=0.95, max_precond_dim=10000,
-                            merge_dims=False):
+                            shampoo_beta=0.95, max_precond_dim=10000):
         """
         Initializes the preconditioner matrices (L and R in the paper).
         """
         state['GG'] = [] # Will hold all the preconditioner matrices (L and R in the paper).
-        if merge_dims:
-            grad = self.merge_dims(grad, max_precond_dim)
 
         for sh in grad.shape:
             if sh > max_precond_dim:
@@ -197,14 +161,11 @@ class SOAP(optim.Optimizer):
         state['precondition_frequency'] = precondition_frequency
         state['shampoo_beta'] = shampoo_beta          
         
-    def project(self, grad, state, merge_dims=False, max_precond_dim=10000):
+    def project(self, grad, state, max_precond_dim=10000):
         """
         Projects the gradient to the eigenbases of the preconditioner.
         """
         original_shape = grad.shape
-        if merge_dims:
-            grad = self.merge_dims(grad, max_precond_dim)
-
         for mat in state['Q']:
             if len(mat) > 0:
                 grad = torch.tensordot(
@@ -215,49 +176,33 @@ class SOAP(optim.Optimizer):
             else:
                 permute_order = list(range(1, len(grad.shape))) + [0]
                 grad = grad.permute(permute_order)
-        
-        if merge_dims:
-            grad = grad.reshape(original_shape)
+
         return grad
         
-    def update_preconditioner(self, grad, state, 
-                              max_precond_dim=10000, merge_dims=False):
+    def update_preconditioner(self, grad, state, max_precond_dim=10000):
         """
         Updates the preconditioner matrices and the eigenbases (L, R, Q_L, Q_R in the paper).
         """
-        if merge_dims:
-            new_grad = self.merge_dims(grad, max_precond_dim)
-            for idx, sh in enumerate(new_grad.shape):
-                if sh <= max_precond_dim:
-                    outer_product = torch.tensordot(
-                            new_grad,
-                            new_grad,
-                            dims=[[*chain(range(idx), range(idx + 1, len(new_grad.shape)))]] * 2,
-                        )
-                    state['GG'][idx].lerp_(outer_product, 1-state['shampoo_beta'])
-        else:
-            for idx, sh in enumerate(grad.shape):
-                if sh <= max_precond_dim:
-                    outer_product = torch.tensordot(
-                            grad,
-                            grad,
-                            # Contracts across all dimensions except for k.
-                            dims=[[*chain(range(idx), range(idx + 1, len(grad.shape)))]] * 2,
-                        )
-                    state['GG'][idx].lerp_(outer_product, 1-state['shampoo_beta'])
+        for idx, sh in enumerate(grad.shape):
+            if sh <= max_precond_dim:
+                outer_product = torch.tensordot(
+                        grad,
+                        grad,
+                        # Contracts across all dimensions except for k.
+                        dims=[[*chain(range(idx), range(idx + 1, len(grad.shape)))]] * 2,
+                    )
+                state['GG'][idx].lerp_(outer_product, 1-state['shampoo_beta'])
                      
         if state['Q'] is None:
             state['Q'] = self.get_orthogonal_matrix(state['GG'])
         if state['step'] > 0 and state['step'] % state['precondition_frequency'] == 0:
-            state['Q'] = self.get_orthogonal_matrix_QR(state, max_precond_dim, merge_dims)           
+            state['Q'] = self.get_orthogonal_matrix_QR(state, max_precond_dim)           
 
-    def project_back(self, grad, state, merge_dims=False, max_precond_dim=10000):
+    def project_back(self, grad, state, max_precond_dim=10000):
         """
         Projects the gradient back to the original space.
         """
         original_shape = grad.shape
-        if merge_dims:
-            grad = self.merge_dims(grad, max_precond_dim)
         for mat in state['Q']:
             if len(mat) > 0:
                 grad = torch.tensordot(
@@ -269,8 +214,6 @@ class SOAP(optim.Optimizer):
                 permute_order = list(range(1, len(grad.shape))) + [0]
                 grad = grad.permute(permute_order)
                 
-        if merge_dims:
-            grad = grad.reshape(original_shape)
         return grad
         
 
@@ -310,7 +253,7 @@ class SOAP(optim.Optimizer):
         return final
         
 
-    def get_orthogonal_matrix_QR(self, state, max_precond_dim=10000, merge_dims=False):
+    def get_orthogonal_matrix_QR(self, state, max_precond_dim=10000):
         """
         Computes the eigenbases of the preconditioner using one round of power iteration 
         followed by torch.linalg.qr decomposition.
@@ -337,10 +280,7 @@ class SOAP(optim.Optimizer):
                 orth_matrix.append(o.data.float())
         
         orig_shape = state['exp_avg_sq'].shape
-        if merge_dims:
-            exp_avg_sq = self.merge_dims(state['exp_avg_sq'], max_precond_dim)
-        else:
-            exp_avg_sq = state['exp_avg_sq']
+        exp_avg_sq = state['exp_avg_sq']
             
         final = []
         for ind, (m,o) in enumerate(zip(matrix, orth_matrix)):
@@ -358,8 +298,5 @@ class SOAP(optim.Optimizer):
                 Q = Q.to(original_device).type(original_type)
             final.append(Q)
         
-        if merge_dims:
-            exp_avg_sq = exp_avg_sq.reshape(orig_shape)
-                
         state['exp_avg_sq'] = exp_avg_sq
         return final
