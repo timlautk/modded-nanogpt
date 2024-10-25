@@ -149,15 +149,11 @@ class SOAP(optim.Optimizer):
         """
         original_shape = grad.shape
         for mat in state['Q']:
-            if len(mat) > 0:
-                grad = torch.tensordot(
-                        grad,
-                        mat,
-                        dims=[[0], [0]],
-                    )
-            else:
-                permute_order = list(range(1, len(grad.shape))) + [0]
-                grad = grad.permute(permute_order)
+            grad = torch.tensordot(
+                    grad,
+                    mat,
+                    dims=[[0], [0]],
+                )
 
         return grad
         
@@ -185,15 +181,11 @@ class SOAP(optim.Optimizer):
         """
         original_shape = grad.shape
         for mat in state['Q']:
-            if len(mat) > 0:
-                grad = torch.tensordot(
-                        grad,
-                        mat,
-                        dims=[[0], [1]],
-                    )
-            else:
-                permute_order = list(range(1, len(grad.shape))) + [0]
-                grad = grad.permute(permute_order)
+            grad = torch.tensordot(
+                    grad,
+                    mat,
+                    dims=[[0], [1]],
+                )
                 
         return grad
         
@@ -204,9 +196,6 @@ class SOAP(optim.Optimizer):
         """
         matrix = []
         for m in mat:
-            if len(m) == 0:
-                matrix.append([])
-                continue
             if m.data.dtype != torch.float:
                 float_data = False
                 original_type = m.data.dtype
@@ -218,9 +207,6 @@ class SOAP(optim.Optimizer):
         
         final = []
         for m in matrix:
-            if len(m) == 0:
-                final.append([])
-                continue
             try:
                 _, Q = torch.linalg.eigh(m+1e-30*torch.eye(m.shape[0], device=m.device))
             except:
@@ -245,10 +231,6 @@ class SOAP(optim.Optimizer):
         matrix = []
         orth_matrix = []
         for m,o in zip(precond_list, orth_list):
-            if len(m) == 0:
-                matrix.append([])
-                orth_matrix.append([])
-                continue
             if m.data.dtype != torch.float:
                 float_data = False
                 original_type = m.data.dtype
@@ -265,9 +247,6 @@ class SOAP(optim.Optimizer):
             
         final = []
         for ind, (m,o) in enumerate(zip(matrix, orth_matrix)):
-            if len(m)==0:
-                final.append([])
-                continue
             est_eig = torch.diag(o.T @ m @ o)
             sort_idx = torch.argsort(est_eig, descending=True)
             exp_avg_sq = exp_avg_sq.index_select(ind, sort_idx)
