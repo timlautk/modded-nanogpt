@@ -1,19 +1,16 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-
 from itertools import chain
+import torch
 
 # Parts of the code are modifications of Pytorch's AdamW optimizer
 # Parts of the code are modifications of code from https://github.com/jiaweizzhao/GaLore/blob/master/galore_torch/galore_projector.py
 
 
-class SOAP(optim.Optimizer):
+class SOAP(torch.optim.Optimizer):
     """
     Implements SOAP algorithm (https://arxiv.org/abs/2409.11321).
 
     Parameters:
-        params (`Iterable[nn.parameter.Parameter]`):
+        params (`Iterable[nn.Parameter]`):
             Iterable of parameters to optimize or dictionaries defining parameter groups.
         lr (`float`, *optional*, defaults to 0.003):
             The learning rate to use.
@@ -51,16 +48,10 @@ class SOAP(optim.Optimizer):
         }
         super().__init__(params, defaults)
         
-    @torch.no_grad()
     def step(self):
         """
         Performs a single optimization step.
-
-        Arguments:
-            closure (`Callable`, *optional*): A closure that reevaluates the model and returns the loss.
         """
-        loss = None
-        
         for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
@@ -69,8 +60,7 @@ class SOAP(optim.Optimizer):
 
                 state = self.state[p]
                 
-                if "step" not in state:
-                    state["step"] = 0 
+                state['step'] = state.get('step', 0) + 1
                     
                 # State initialization
                 if "exp_avg" not in state:
@@ -95,8 +85,6 @@ class SOAP(optim.Optimizer):
 
                 exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
                 beta1, beta2 = group["betas"]
-
-                state["step"] += 1
 
                 # Decay the first and second moment running average coefficient
                 # In-place operations to update the averages at the same time
@@ -127,8 +115,6 @@ class SOAP(optim.Optimizer):
                 # Update is done after the gradient step to avoid using current gradients in the projection.
                 self.update_preconditioner(grad, state)
         
-        return loss
-    
     def init_preconditioner(self, grad, state, precondition_frequency=10, 
                             shampoo_beta=0.95):
         """
@@ -179,7 +165,6 @@ class SOAP(optim.Optimizer):
         """
         Projects the gradient back to the original space.
         """
-        original_shape = grad.shape
         for mat in state['Q']:
             grad = torch.tensordot(
                     grad,
@@ -196,13 +181,7 @@ class SOAP(optim.Optimizer):
         """
         matrix = []
         for m in mat:
-            if m.data.dtype != torch.float:
-                float_data = False
-                original_type = m.data.dtype
-                matrix.append(m.data.float())
-            else:
-                float_data = True
-                matrix.append(m.data)
+            matrix.append(m.data)
         
         final = []
         for m in matrix:
@@ -212,9 +191,6 @@ class SOAP(optim.Optimizer):
                 _, Q = torch.linalg.eigh(m.to(torch.float64)+1e-30*torch.eye(m.shape[0], device=m.device))
                 Q = Q.to(m.dtype)
             Q = torch.flip(Q, [1])
-
-            if not float_data:
-                Q = Q.type(original_type)
             final.append(Q)
         return final
         
@@ -230,15 +206,8 @@ class SOAP(optim.Optimizer):
         matrix = []
         orth_matrix = []
         for m,o in zip(precond_list, orth_list):
-            if m.data.dtype != torch.float:
-                float_data = False
-                original_type = m.data.dtype
-                matrix.append(m.data.float())
-                orth_matrix.append(o.data.float())
-            else:
-                float_data = True
-                matrix.append(m.data.float())
-                orth_matrix.append(o.data.float())
+            matrix.append(m.data)
+            orth_matrix.append(o.data)
         
         orig_shape = state['exp_avg_sq'].shape
         exp_avg_sq = state['exp_avg_sq']
@@ -251,9 +220,6 @@ class SOAP(optim.Optimizer):
             o = o[:,sort_idx]
             power_iter = m @ o
             Q, _ = torch.linalg.qr(power_iter)
-
-            if not float_data:
-                Q = Q.type(original_type)
             final.append(Q)
         
         state['exp_avg_sq'] = exp_avg_sq
