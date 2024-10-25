@@ -35,14 +35,8 @@ class SOAP(torch.optim.Optimizer):
         precondition_frequency: int=10,
         normalize_grads: bool = False,
     ):
-        defaults = {
-            "lr": lr,
-            "betas": betas,
-            "shampoo_beta": shampoo_beta,
-            "eps": eps,
-            "precondition_frequency": precondition_frequency,
-            "normalize_grads": normalize_grads,
-        }
+        defaults = dict(lr=lr, betas=beats, shampoo_beta=shampoo_beta, eps=eps,
+                        precondition_frequency=precondition_frequency, normalize_grads=normalize_grads)
         super().__init__(params, defaults)
 
     def step(self):
