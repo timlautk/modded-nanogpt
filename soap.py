@@ -53,6 +53,9 @@ class SOAP(torch.optim.Optimizer):
         Performs a single optimization step.
         """
         for group in self.param_groups:
+
+            beta1, beta2 = group["betas"]
+
             for p in group["params"]:
                 if p.grad is None:
                     continue
@@ -76,32 +79,29 @@ class SOAP(torch.optim.Optimizer):
                 grad_projected = self.project(grad, state)
 
                 exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
-                beta1, beta2 = group["betas"]
 
                 # Decay the first and second moment running average coefficient
                 # In-place operations to update the averages at the same time
                 exp_avg.mul_(beta1).add_(grad, alpha=(1.0 - beta1))
                 exp_avg_sq.mul_(beta2).add_(grad_projected.square(), alpha=(1.0 - beta2))
 
-                denom = exp_avg_sq.sqrt().add_(group["eps"])
-
                 # Projecting the exponential moving average of gradients to the eigenbases of Shampoo's preconditioner 
                 # i.e. projecting to the eigenbases of matrices in state['GG']
                 exp_avg_projected = self.project(exp_avg, state)
+
+                denom = exp_avg_sq.sqrt().add_(group["eps"])
+
+                # Projecting back the preconditioned (by Adam) exponential moving average of gradients
+                # to the original space
+                norm_grad = self.project_back(exp_avg_projected / denom, state)
 
                 step_size = group["lr"]
                 #if group["correct_bias"]:
                 bias_correction1 = 1.0 - beta1 ** (state["step"])
                 bias_correction2 = 1.0 - beta2 ** (state["step"])
                 step_size = step_size * (bias_correction2 ** .5) / bias_correction1
-
-                # Projecting back the preconditioned (by Adam) exponential moving average of gradients
-                # to the original space
-                norm_grad = self.project_back(exp_avg_projected / denom, state)
-
                 if group["normalize_grads"]:
                     norm_grad = norm_grad / (1e-30+torch.mean(norm_grad**2)**0.5)
-
                 p.add_(norm_grad, alpha=-step_size)
 
                 # Update is done after the gradient step to avoid using current gradients in the projection.
@@ -148,7 +148,6 @@ class SOAP(torch.optim.Optimizer):
                     mat,
                     dims=[[0], [1]],
                 )
-                
         return grad
 
     def get_orthogonal_matrix(self, mat):
