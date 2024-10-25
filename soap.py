@@ -78,7 +78,7 @@ class SOAP(torch.optim.Optimizer):
                     )
                     self.update_preconditioner(grad, state)
                     continue # first step is skipped so that we never use the current gradients in the projection.
-                
+
                 # Projecting gradients to the eigenbases of Shampoo's preconditioner 
                 # i.e. projecting to the eigenbases of matrices in state['GG']
                 grad_projected = self.project(grad, state)
@@ -92,11 +92,11 @@ class SOAP(torch.optim.Optimizer):
                 exp_avg_sq.mul_(beta2).add_(grad_projected.square(), alpha=(1.0 - beta2))
 
                 denom = exp_avg_sq.sqrt().add_(group["eps"])
-                
+
                 # Projecting the exponential moving average of gradients to the eigenbases of Shampoo's preconditioner 
                 # i.e. projecting to the eigenbases of matrices in state['GG']
                 exp_avg_projected = self.project(exp_avg, state)
-                
+
                 step_size = group["lr"]
                 #if group["correct_bias"]:
                 bias_correction1 = 1.0 - beta1 ** (state["step"])
@@ -109,26 +109,25 @@ class SOAP(torch.optim.Optimizer):
 
                 if group["normalize_grads"]:
                     norm_grad = norm_grad / (1e-30+torch.mean(norm_grad**2)**0.5)
-                
+
                 p.add_(norm_grad, alpha=-step_size)
-                
+
                 # Update is done after the gradient step to avoid using current gradients in the projection.
                 self.update_preconditioner(grad, state)
-        
+
     def init_preconditioner(self, grad, state, precondition_frequency=10, 
                             shampoo_beta=0.95):
         """
         Initializes the preconditioner matrices (L and R in the paper).
         """
         state['GG'] = [] # Will hold all the preconditioner matrices (L and R in the paper).
-
         for sh in grad.shape:
             state['GG'].append(torch.zeros(sh, sh, device=grad.device))
-                    
+
         state['Q'] = None # Will hold all the eigenbases of the preconditioner.
         state['precondition_frequency'] = precondition_frequency
-        state['shampoo_beta'] = shampoo_beta          
-        
+        state['shampoo_beta'] = shampoo_beta
+
     def project(self, grad, state):
         """
         Projects the gradient to the eigenbases of the preconditioner.
@@ -140,9 +139,8 @@ class SOAP(torch.optim.Optimizer):
                     mat,
                     dims=[[0], [0]],
                 )
-
         return grad
-        
+
     def update_preconditioner(self, grad, state):
         """
         Updates the preconditioner matrices and the eigenbases (L, R, Q_L, Q_R in the paper).
@@ -173,18 +171,13 @@ class SOAP(torch.optim.Optimizer):
                 )
                 
         return grad
-        
 
     def get_orthogonal_matrix(self, mat):
         """
         Computes the eigenbases of the preconditioner using torch.linalg.eigh decomposition.
         """
-        matrix = []
-        for m in mat:
-            matrix.append(m.data)
-        
         final = []
-        for m in matrix:
+        for m in mat:
             try:
                 _, Q = torch.linalg.eigh(m+1e-30*torch.eye(m.shape[0], device=m.device))
             except:
@@ -193,7 +186,6 @@ class SOAP(torch.optim.Optimizer):
             Q = torch.flip(Q, [1])
             final.append(Q)
         return final
-        
 
     def get_orthogonal_matrix_QR(self, state):
         """
@@ -203,17 +195,11 @@ class SOAP(torch.optim.Optimizer):
         precond_list = state['GG']
         orth_list = state['Q']
 
-        matrix = []
-        orth_matrix = []
-        for m,o in zip(precond_list, orth_list):
-            matrix.append(m.data)
-            orth_matrix.append(o.data)
-        
         orig_shape = state['exp_avg_sq'].shape
         exp_avg_sq = state['exp_avg_sq']
-            
+
         final = []
-        for ind, (m,o) in enumerate(zip(matrix, orth_matrix)):
+        for ind, (m, o) in enumerate(zip(precond_list, orth_list)):
             est_eig = torch.diag(o.T @ m @ o)
             sort_idx = torch.argsort(est_eig, descending=True)
             exp_avg_sq = exp_avg_sq.index_select(ind, sort_idx)
@@ -224,3 +210,4 @@ class SOAP(torch.optim.Optimizer):
         
         state['exp_avg_sq'] = exp_avg_sq
         return final
+
