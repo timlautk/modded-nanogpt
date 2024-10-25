@@ -24,27 +24,15 @@ class SOAP(torch.optim.Optimizer):
             Helps at large precondition_frequency (~100 in our experiments),
             but hurts performance at small precondition_frequency (~10 in our experiments).
     """
-
-    def __init__(
-        self,
-        params,
-        lr: float = 3e-3,
-        betas=(0.95, 0.95),
-        shampoo_beta: float= -1,
-        eps: float = 1e-8,
-        precondition_frequency: int=10,
-        normalize_grads: bool = False,
-    ):
+    def __init__(self, params, lr=3e-3, betas=(0.95, 0.95), shampoo_beta=-1, eps=1e-8,
+                 precondition_frequency=10, normalize_grads=False):
         defaults = dict(lr=lr, betas=beats, shampoo_beta=shampoo_beta, eps=eps,
                         precondition_frequency=precondition_frequency, normalize_grads=normalize_grads)
         super().__init__(params, defaults)
 
     def step(self):
-        """
-        Performs a single optimization step.
-        """
-        for group in self.param_groups:
 
+        for group in self.param_groups:
             beta1, beta2 = group["betas"]
 
             for p in group["params"]:
