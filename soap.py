@@ -32,8 +32,6 @@ class SOAP(optim.Optimizer):
             Whether or not to normalize gradients per layer. 
             Helps at large precondition_frequency (~100 in our experiments), 
             but hurts performance at small precondition_frequency (~10 in our experiments).
-        correct_bias (`bool`, *optional*, defaults to `True`):
-            Whether or not to use bias correction in Adam.
     """
 
     def __init__(
@@ -46,7 +44,6 @@ class SOAP(optim.Optimizer):
         precondition_frequency: int=10,
         max_precond_dim: int=10000, # 
         normalize_grads: bool = False,
-        correct_bias: bool = True,
     ):
         defaults = {
             "lr": lr,
@@ -56,7 +53,6 @@ class SOAP(optim.Optimizer):
             "precondition_frequency": precondition_frequency,
             "max_precond_dim": max_precond_dim,
             "normalize_grads": normalize_grads,
-            "correct_bias": correct_bias,
         }
         super().__init__(params, defaults)
         
@@ -123,10 +119,10 @@ class SOAP(optim.Optimizer):
                                                  max_precond_dim=group['max_precond_dim'])
                 
                 step_size = group["lr"]
-                if group["correct_bias"]:
-                    bias_correction1 = 1.0 - beta1 ** (state["step"])
-                    bias_correction2 = 1.0 - beta2 ** (state["step"])
-                    step_size = step_size * (bias_correction2 ** .5) / bias_correction1
+                #if group["correct_bias"]:
+                bias_correction1 = 1.0 - beta1 ** (state["step"])
+                bias_correction2 = 1.0 - beta2 ** (state["step"])
+                step_size = step_size * (bias_correction2 ** .5) / bias_correction1
 
                 # Projecting back the preconditioned (by Adam) exponential moving average of gradients
                 # to the original space
