@@ -8,7 +8,6 @@ import torch
 class SOAP(torch.optim.Optimizer):
     """
     Implements SOAP algorithm (https://arxiv.org/abs/2409.11321).
-
     Parameters:
         params (`Iterable[nn.Parameter]`):
             Iterable of parameters to optimize or dictionaries defining parameter groups.
@@ -96,11 +95,11 @@ class SOAP(torch.optim.Optimizer):
 
                 step_size = group["lr"]
                 #if group["correct_bias"]:
-                bias_correction1 = 1.0 - beta1 ** (state["step"])
-                bias_correction2 = 1.0 - beta2 ** (state["step"])
-                step_size = step_size * (bias_correction2 ** .5) / bias_correction1
+                bias_correction1 = 1.0 - beta1**state["step"]
+                bias_correction2 = 1.0 - beta2**state["step"]
+                step_size = step_size * (bias_correction2**0.5) / bias_correction1
                 if group["normalize_grads"]:
-                    norm_grad = norm_grad / (1e-30+torch.mean(norm_grad**2)**0.5)
+                    norm_grad = norm_grad / (1e-30+norm_grad.square().mean().sqrt())
                 p.add_(norm_grad, alpha=-step_size)
 
                 # Update is done after the gradient step to avoid using current gradients in the projection.

@@ -346,7 +346,7 @@ class Hyperparameters:
     num_iterations : int = 5100 # number of iterations to run
     embed_learning_rate : float = 0.0036
     muon_learning_rate : float = 0.02
-    warmup_iters : int = 0
+    warmup_iters : int = 250
     warmdown_iters : int = 1450 # number of iterations of linear warmup/warmdown for triangular or trapezoidal schedule
     weight_decay : float = 0
     # evaluation and logging hyperparams
