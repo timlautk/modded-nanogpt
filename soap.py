@@ -37,9 +37,6 @@ class SOAP(optim.Optimizer):
             Whether or not to normalize gradients per layer. 
             Helps at large precondition_frequency (~100 in our experiments), 
             but hurts performance at small precondition_frequency (~10 in our experiments).
-        data_format (`str`, *optional*, defaults to `channels_first`):
-            Data format of the input for convolutional layers.
-            Should be "channels_last" for data_format of NHWC and "channels_first" for NCHW.
         correct_bias (`bool`, *optional*, defaults to `True`):
             Whether or not to use bias correction in Adam.
     """
@@ -57,7 +54,6 @@ class SOAP(optim.Optimizer):
         merge_dims: bool = False, # Merge dimensions till the product of the dimensions is less than or equal to max_precond_dim.
         precondition_1d: bool = False,
         normalize_grads: bool = False,
-        data_format: str = "channels_first",
         correct_bias: bool = True,
     ):
         defaults = {
@@ -74,15 +70,11 @@ class SOAP(optim.Optimizer):
             "correct_bias": correct_bias,
         }
         super().__init__(params, defaults)
-        self._data_format = data_format
         
     def merge_dims(self, grad, max_precond_dim):
         """
         Merges dimensions of the gradient tensor till the product of the dimensions is less than or equal to max_precond_dim.
         """
-        assert self._data_format in ["channels_first", "channels_last"]
-        if self._data_format == "channels_last" and grad.dim() == 4:
-            grad = grad.permute(0, 3, 1, 2)
         shape = grad.shape
         new_shape = []
         
@@ -239,8 +231,6 @@ class SOAP(optim.Optimizer):
         """
         original_shape = grad.shape
         if merge_dims:
-            if grad.dim() == 4 and self._data_format == 'channels_last':
-                permuted_shape = grad.permute(0, 3, 1, 2).shape
             grad = self.merge_dims(grad, max_precond_dim)
 
         for mat in state['Q']:
@@ -255,10 +245,7 @@ class SOAP(optim.Optimizer):
                 grad = grad.permute(permute_order)
         
         if merge_dims:
-            if self._data_format == 'channels_last' and len(original_shape) == 4:
-                grad = grad.reshape(permuted_shape).permute(0, 2, 3, 1)
-            else:
-                grad = grad.reshape(original_shape)
+            grad = grad.reshape(original_shape)
         return grad
         
     def update_preconditioner(self, grad, state, 
@@ -302,8 +289,6 @@ class SOAP(optim.Optimizer):
         """
         original_shape = grad.shape
         if merge_dims:
-            if self._data_format == 'channels_last' and grad.dim() == 4:
-                permuted_shape = grad.permute(0, 3, 1, 2).shape
             grad = self.merge_dims(grad, max_precond_dim)
         for mat in state['Q']:
             if len(mat) > 0:
@@ -317,10 +302,7 @@ class SOAP(optim.Optimizer):
                 grad = grad.permute(permute_order)
                 
         if merge_dims:
-            if self._data_format == 'channels_last' and len(original_shape) == 4:
-                grad = grad.reshape(permuted_shape).permute(0, 2, 3, 1)
-            else:
-                grad = grad.reshape(original_shape)
+            grad = grad.reshape(original_shape)
         return grad
         
 
@@ -387,8 +369,6 @@ class SOAP(optim.Optimizer):
                 orth_matrix.append(o.data.float())
         
         orig_shape = state['exp_avg_sq'].shape
-        if self._data_format == 'channels_last' and len(orig_shape) == 4:
-            permuted_shape = state['exp_avg_sq'].permute(0, 3, 1, 2).shape
         if merge_dims:
             exp_avg_sq = self.merge_dims(state['exp_avg_sq'], max_precond_dim)
         else:
@@ -411,10 +391,7 @@ class SOAP(optim.Optimizer):
             final.append(Q)
         
         if merge_dims:
-            if self._data_format == 'channels_last' and len(orig_shape) == 4:
-                exp_avg_sq = exp_avg_sq.reshape(permuted_shape).permute(0, 2, 3, 1)
-            else:
-                exp_avg_sq = exp_avg_sq.reshape(orig_shape)
+            exp_avg_sq = exp_avg_sq.reshape(orig_shape)
                 
         state['exp_avg_sq'] = exp_avg_sq
         return final
