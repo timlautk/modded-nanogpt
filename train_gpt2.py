@@ -93,7 +93,7 @@ class SOAP(torch.optim.Optimizer):
                 #if group["correct_bias"]:
                 bias_correction1 = 1 - beta1**state["step"]
                 bias_correction2 = 1 - beta2**state["step"]
-                step_size = step_size * (bias_correction2**0.5) / bias_correction1
+                step_size = step_size * bias_correction2**0.5 / bias_correction1
                 if group["normalize_grads"]:
                     norm_grad = norm_grad / (1e-30+norm_grad.square().mean().sqrt())
                 p.data.add_(norm_grad, alpha=-step_size)
@@ -105,32 +105,7 @@ class SOAP(torch.optim.Optimizer):
         """
         Projects the gradient to the eigenbases of the preconditioner.
         """
-        for mat in state['Q']:
-            grad = torch.tensordot(
-                    grad,
-                    mat,
-                    dims=[[0], [0]],
-                )
-        return grad
-
-    def update_preconditioner(self, grad, state):
-        """
-        Updates the preconditioner matrices and the eigenbases (L, R, Q_L, Q_R in the paper).
-        """
-        assert len(grad.shape) == 2
-        for i in range(2):
-            outer_product = torch.tensordot(
-                    grad,
-                    grad,
-                    # Contracts across all dimensions except for k.
-                    dims=[[1-i], [1-i]]
-                )
-            state['GG'][i].lerp_(outer_product, 1-state['shampoo_beta'])
-
-        if state['Q'] is None:
-            state['Q'] = self.get_orthogonal_matrix(state['GG'])
-        if state['step'] > 0 and state['step'] % state['precondition_frequency'] == 0:
-            state['Q'] = self.get_orthogonal_matrix_QR(state)
+        return state['Q'][0].T @ grad @ state['Q'][1]
 
     def project_back(self, grad, state):
         """
@@ -144,15 +119,18 @@ class SOAP(torch.optim.Optimizer):
                 )
         return grad
 
-    def get_orthogonal_matrix(self, mat):
+    def update_preconditioner(self, grad, state):
         """
-        Computes the eigenbases of the preconditioner using torch.linalg.eigh decomposition.
+        Updates the preconditioner matrices and the eigenbases (L, R, Q_L, Q_R in the paper).
         """
-        final = []
-        for m in mat:
-            _, Q = torch.linalg.eigh(m)
-            final.append(Q.flip(1))
-        return final
+        assert len(grad.shape) == 2
+        state['GG'][0].lerp_(grad @ grad.T, 1-state['shampoo_beta'])
+        state['GG'][1].lerp_(grad.T @ grad, 1-state['shampoo_beta'])
+
+        if state['Q'] is None:
+            state['Q'] = [torch.linalg.eigh(m)[1].flip(1) for m in state['GG']] # start with exact orthogonalization using eigh
+        if state['step'] > 0 and state['step'] % state['precondition_frequency'] == 0:
+            state['Q'] = self.get_orthogonal_matrix_QR(state)
 
     def get_orthogonal_matrix_QR(self, state):
         """
