@@ -23,7 +23,6 @@ class SOAP(optim.Optimizer):
             If >= 0, use this beta for the preconditioner (L and R in paper, state['GG'] below) moving average instead of betas[1].
         eps (`float`, *optional*, defaults to 1e-08):
             Adam's epsilon for numerical stability.
-        weight_decay (`float`, *optional*, defaults to 0.01): weight decay coefficient.
         precondition_frequency (`int`, *optional*, defaults to 10):
             How often to update the preconditioner.
         max_precond_dim (`int`, *optional*, defaults to 10000):
@@ -48,7 +47,6 @@ class SOAP(optim.Optimizer):
         betas=(0.95, 0.95),
         shampoo_beta: float= -1,
         eps: float = 1e-8,
-        weight_decay: float = 0.01,
         precondition_frequency: int=10,
         max_precond_dim: int=10000, # 
         merge_dims: bool = False, # Merge dimensions till the product of the dimensions is less than or equal to max_precond_dim.
@@ -61,7 +59,6 @@ class SOAP(optim.Optimizer):
             "betas": betas,
             "shampoo_beta": shampoo_beta,
             "eps": eps,
-            "weight_decay": weight_decay,
             "precondition_frequency": precondition_frequency,
             "max_precond_dim": max_precond_dim,
             "merge_dims": merge_dims,
@@ -179,18 +176,6 @@ class SOAP(optim.Optimizer):
                 
                 p.add_(norm_grad, alpha=-step_size)
                 
-
-                # From AdamW code: Just adding the square of the weights to the loss function is *not*
-                # the correct way of using L2 regularization/weight decay with Adam,
-                # since that will interact with the m and v parameters in strange ways.
-                #
-                # Instead we want to decay the weights in a manner that doesn't interact
-                # with the m/v parameters. This is equivalent to adding the square
-                # of the weights to the loss with plain (non-momentum) SGD.
-                # Add weight decay at the end (fixed version)
-                if group["weight_decay"] > 0.0:
-                    p.add_(p, alpha=(-group["lr"] * group["weight_decay"]))
-                    
                 # Update is done after the gradient step to avoid using current gradients in the projection.
                 self.update_preconditioner(grad, state, 
                                                max_precond_dim=group['max_precond_dim'],
