@@ -26,7 +26,7 @@ class SOAP(torch.optim.Optimizer):
     """
     def __init__(self, params, lr=3e-3, betas=(0.95, 0.95), shampoo_beta=-1, eps=1e-8,
                  precondition_frequency=10, normalize_grads=False):
-        defaults = dict(lr=lr, betas=beats, shampoo_beta=shampoo_beta, eps=eps,
+        defaults = dict(lr=lr, betas=betas, shampoo_beta=shampoo_beta, eps=eps,
                         precondition_frequency=precondition_frequency, normalize_grads=normalize_grads)
         super().__init__(params, defaults)
 
