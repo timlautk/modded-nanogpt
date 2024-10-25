@@ -154,13 +154,8 @@ class SOAP(torch.optim.Optimizer):
         """
         final = []
         for m in mat:
-            try:
-                _, Q = torch.linalg.eigh(m+1e-30*torch.eye(m.shape[0], device=m.device))
-            except:
-                _, Q = torch.linalg.eigh(m.to(torch.float64)+1e-30*torch.eye(m.shape[0], device=m.device))
-                Q = Q.to(m.dtype)
-            Q = torch.flip(Q, [1])
-            final.append(Q)
+            _, Q = torch.linalg.eigh(m)
+            final.append(Q.flip(1))
         return final
 
     def get_orthogonal_matrix_QR(self, state):
