@@ -1,10 +1,8 @@
-from itertools import chain
 import torch
+# SOAP optimizer, refactored from https://github.com/nikhilvyas/SOAP. Original comments included.
 
 # Parts of the code are modifications of Pytorch's AdamW optimizer
 # Parts of the code are modifications of code from https://github.com/jiaweizzhao/GaLore/blob/master/galore_torch/galore_projector.py
-
-
 class SOAP(torch.optim.Optimizer):
     """
     Implements SOAP algorithm (https://arxiv.org/abs/2409.11321).
@@ -64,9 +62,7 @@ class SOAP(torch.optim.Optimizer):
                 if state['step'] == 1:
                     state["exp_avg"] = torch.zeros_like(grad)
                     state["exp_avg_sq"] = torch.zeros_like(grad)
-                    state['GG'] = [] # Will hold all the preconditioner matrices (L and R in the paper).
-                    for sh in grad.shape:
-                        state['GG'].append(torch.zeros(sh, sh, device=grad.device))
+                    state['GG'] = [torch.zeros(d, d, device=grad.device) for d in grad.shape] # Will hold all the preconditioner matrices (L and R in the paper).
                     state['Q'] = None # Will hold all the eigenbases of the preconditioner.
                     state['precondition_frequency'] = group['precondition_frequency']
                     state['shampoo_beta'] = group['shampoo_beta'] if group['shampoo_beta'] >= 0 else beta2
@@ -95,8 +91,8 @@ class SOAP(torch.optim.Optimizer):
 
                 step_size = group["lr"]
                 #if group["correct_bias"]:
-                bias_correction1 = 1.0 - beta1**state["step"]
-                bias_correction2 = 1.0 - beta2**state["step"]
+                bias_correction1 = 1 - beta1**state["step"]
+                bias_correction2 = 1 - beta2**state["step"]
                 step_size = step_size * (bias_correction2**0.5) / bias_correction1
                 if group["normalize_grads"]:
                     norm_grad = norm_grad / (1e-30+norm_grad.square().mean().sqrt())
