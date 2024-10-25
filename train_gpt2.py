@@ -76,8 +76,8 @@ class SOAP(torch.optim.Optimizer):
                 exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
                 # Decay the first and second moment running average coefficient
                 # In-place operations to update the averages at the same time
-                exp_avg.mul_(beta1).add_(grad, alpha=(1.0 - beta1))
-                exp_avg_sq.mul_(beta2).add_(grad_projected.square(), alpha=(1.0 - beta2))
+                exp_avg.mul_(beta1).add_(grad, alpha=1-beta1)
+                exp_avg_sq.mul_(beta2).add_(grad_projected.square(), alpha=1-beta2)
 
                 # Projecting the exponential moving average of gradients to the eigenbases of Shampoo's preconditioner
                 # i.e. projecting to the eigenbases of matrices in state['GG']
