@@ -129,7 +129,7 @@ class SOAP(torch.optim.Optimizer):
                     # Contracts across all dimensions except for k.
                     dims=[[1-i], [1-i]]
                 )
-            state['GG'][idx].lerp_(outer_product, 1-state['shampoo_beta'])
+            state['GG'][i].lerp_(outer_product, 1-state['shampoo_beta'])
 
         if state['Q'] is None:
             state['Q'] = self.get_orthogonal_matrix(state['GG'])
@@ -579,7 +579,6 @@ ctx = torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16)
 # init the optimizer(s)
 optimizer1 = torch.optim.AdamW(raw_model.lm_head.parameters(), lr=args.embed_learning_rate, betas=(0.9, 0.95),
                                weight_decay=args.weight_decay, fused=True)
-from soap import SOAP
 optimizer2 = SOAP(raw_model.transformer.h.parameters(), lr=0.0018, betas=(.95, .95), precondition_frequency=10)
 optimizers = [optimizer1, optimizer2]
 # learning rate decay scheduler (linear warmup and warmdown)
