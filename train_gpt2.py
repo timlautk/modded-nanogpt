@@ -111,13 +111,7 @@ class SOAP(torch.optim.Optimizer):
         """
         Projects the gradient back to the original space.
         """
-        for mat in state['Q']:
-            grad = torch.tensordot(
-                    grad,
-                    mat,
-                    dims=[[0], [1]],
-                )
-        return grad
+        return state['Q'][0] @ grad @ state['Q'][1].T
 
     def update_preconditioner(self, grad, state):
         """
@@ -129,28 +123,23 @@ class SOAP(torch.optim.Optimizer):
 
         if state['Q'] is None:
             state['Q'] = [torch.linalg.eigh(m)[1].flip(1) for m in state['GG']] # start with exact orthogonalization using eigh
-        if state['step'] > 0 and state['step'] % state['precondition_frequency'] == 0:
-            state['Q'] = self.get_orthogonal_matrix_QR(state)
 
-    def get_orthogonal_matrix_QR(self, state):
-        """
-        Computes the eigenbases of the preconditioner using one round of power iteration
-        followed by torch.linalg.qr decomposition.
-        """
-        exp_avg_sq = state['exp_avg_sq']
-
-        final = []
-        for ind, (m, o) in enumerate(zip(state['GG'], state['Q'])):
-            est_eig = torch.diag(o.T @ m @ o)
-            sort_idx = torch.argsort(est_eig, descending=True)
-            exp_avg_sq = exp_avg_sq.index_select(ind, sort_idx)
-            o = o[:, sort_idx]
-            power_iter = m @ o
-            Q, _ = torch.linalg.qr(power_iter)
-            final.append(Q)
-
-        state['exp_avg_sq'] = exp_avg_sq
-        return final
+        if state['step'] % state['precondition_frequency'] == 0:
+            """
+            Computes the eigenbases of the preconditioner using one round of power iteration
+            followed by torch.linalg.qr decomposition.
+            """
+            exp_avg_sq = state['exp_avg_sq']
+            for i in range(2):
+                m = state['GG'][i]
+                o = state['Q'][i]
+                est_eig = torch.diag(o.T @ m @ o)
+                sort_idx = torch.argsort(est_eig, descending=True)
+                o = o[:, sort_idx]
+                power_iter = m @ o
+                Q, _ = torch.linalg.qr(power_iter)
+                exp_avg_sq[:] = exp_avg_sq.index_select(i, sort_idx)
+                state['Q'][i] = Q
 
 import os
 import sys
