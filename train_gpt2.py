@@ -100,7 +100,7 @@ class SOAP(torch.optim.Optimizer):
                 step_size = step_size * (bias_correction2**0.5) / bias_correction1
                 if group["normalize_grads"]:
                     norm_grad = norm_grad / (1e-30+norm_grad.square().mean().sqrt())
-                p.add_(norm_grad, alpha=-step_size)
+                p.data.add_(norm_grad, alpha=-step_size)
 
                 # Update is done after the gradient step to avoid using current gradients in the projection.
                 self.update_preconditioner(grad, state)
