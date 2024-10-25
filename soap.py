@@ -199,7 +199,6 @@ class SOAP(optim.Optimizer):
             if m.data.dtype != torch.float:
                 float_data = False
                 original_type = m.data.dtype
-                original_device = m.data.device
                 matrix.append(m.data.float())
             else:
                 float_data = True
@@ -215,7 +214,7 @@ class SOAP(optim.Optimizer):
             Q = torch.flip(Q, [1])
 
             if not float_data:
-                Q = Q.to(original_device).type(original_type)
+                Q = Q.type(original_type)
             final.append(Q)
         return final
         
@@ -234,7 +233,6 @@ class SOAP(optim.Optimizer):
             if m.data.dtype != torch.float:
                 float_data = False
                 original_type = m.data.dtype
-                original_device = m.data.device
                 matrix.append(m.data.float())
                 orth_matrix.append(o.data.float())
             else:
@@ -255,7 +253,7 @@ class SOAP(optim.Optimizer):
             Q, _ = torch.linalg.qr(power_iter)
 
             if not float_data:
-                Q = Q.to(original_device).type(original_type)
+                Q = Q.type(original_type)
             final.append(Q)
         
         state['exp_avg_sq'] = exp_avg_sq
