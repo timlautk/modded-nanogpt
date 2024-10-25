@@ -57,25 +57,17 @@ class SOAP(torch.optim.Optimizer):
                 if p.grad is None:
                     continue
                 grad = p.grad
-
                 state = self.state[p]
-                
                 state['step'] = state.get('step', 0) + 1
-                    
-                # State initialization
-                if "exp_avg" not in state:
-                    # Exponential moving average of gradient values
+                if state['step'] == 1:
                     state["exp_avg"] = torch.zeros_like(grad)
-                    # Exponential moving average of squared gradient values
                     state["exp_avg_sq"] = torch.zeros_like(grad)
-                
-                if 'Q' not in state:
-                    self.init_preconditioner(
-                        grad,
-                        state,
-                        precondition_frequency=group['precondition_frequency'],
-                        shampoo_beta=(group['shampoo_beta'] if group['shampoo_beta'] >= 0 else group["betas"][1]),
-                    )
+                    state['GG'] = [] # Will hold all the preconditioner matrices (L and R in the paper).
+                    for sh in grad.shape:
+                        state['GG'].append(torch.zeros(sh, sh, device=grad.device))
+                    state['Q'] = None # Will hold all the eigenbases of the preconditioner.
+                    state['precondition_frequency'] = group['precondition_frequency']
+                    state['shampoo_beta'] = group['shampoo_beta'] if group['shampoo_beta'] >= 0 else group["betas"][1]
                     self.update_preconditioner(grad, state)
                     continue # first step is skipped so that we never use the current gradients in the projection.
 
@@ -114,19 +106,6 @@ class SOAP(torch.optim.Optimizer):
 
                 # Update is done after the gradient step to avoid using current gradients in the projection.
                 self.update_preconditioner(grad, state)
-
-    def init_preconditioner(self, grad, state, precondition_frequency=10, 
-                            shampoo_beta=0.95):
-        """
-        Initializes the preconditioner matrices (L and R in the paper).
-        """
-        state['GG'] = [] # Will hold all the preconditioner matrices (L and R in the paper).
-        for sh in grad.shape:
-            state['GG'].append(torch.zeros(sh, sh, device=grad.device))
-
-        state['Q'] = None # Will hold all the eigenbases of the preconditioner.
-        state['precondition_frequency'] = precondition_frequency
-        state['shampoo_beta'] = shampoo_beta
 
     def project(self, grad, state):
         """
