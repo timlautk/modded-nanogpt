@@ -22,6 +22,8 @@ class SOAP(torch.optim.Optimizer):
     """
     def __init__(self, params, lr=3e-3, betas=(0.95, 0.95), shampoo_beta=-1, eps=1e-8,
                  precondition_frequency=10):
+        if shampoo_beta == -1:
+            shampoo_beta = betas[1]
         defaults = dict(lr=lr, betas=betas, shampoo_beta=shampoo_beta, eps=eps,
                         precondition_frequency=precondition_frequency)
         super().__init__(params, defaults)
@@ -44,7 +46,6 @@ class SOAP(torch.optim.Optimizer):
                     state["exp_avg_sq"] = torch.zeros_like(grad)
                     state['GG'] = [torch.zeros(d, d, device=grad.device) for d in grad.shape] # Will hold all the preconditioner matrices (L and R in the paper).
                     state['Q'] = [torch.linalg.eigh(m)[1].flip(1) for m in state['GG']] # start with exact orthogonalization using eigh
-                    state['shampoo_beta'] = group['shampoo_beta'] if group['shampoo_beta'] >= 0 else beta2
                     continue # first step is skipped so that we never use the current gradients in the projection.
 
                 # Projecting gradients to the eigenbases of Shampoo's preconditioner
@@ -73,8 +74,8 @@ class SOAP(torch.optim.Optimizer):
                 p.data.add_(update, alpha=-step_size)
 
                 # Preconditioner update is done after the gradient step to avoid using current gradients in the projection.
-                state['GG'][0].lerp_(grad @ grad.T, 1-state['shampoo_beta'])
-                state['GG'][1].lerp_(grad.T @ grad, 1-state['shampoo_beta'])
+                state['GG'][0].lerp_(grad @ grad.T, 1-group['shampoo_beta'])
+                state['GG'][1].lerp_(grad.T @ grad, 1-group['shampoo_beta'])
                 if state['step'] % group['precondition_frequency'] == 0:
                     self.update_preconditioner(grad, state)
 
