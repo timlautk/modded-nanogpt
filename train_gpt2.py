@@ -31,9 +31,9 @@ class SOAP(torch.optim.Optimizer):
     def step(self):
 
         for group in self.param_groups:
-            beta1, beta2 = group["betas"]
+            beta1, beta2 = group['betas']
 
-            for p in group["params"]:
+            for p in group['params']:
                 if p.grad is None:
                     continue
                 grad = p.grad
@@ -42,8 +42,8 @@ class SOAP(torch.optim.Optimizer):
                 state = self.state[p]
                 state['step'] = state.get('step', 0) + 1
                 if state['step'] == 1:
-                    state["exp_avg"] = torch.zeros_like(grad)
-                    state["exp_avg_sq"] = torch.zeros_like(grad)
+                    state['exp_avg'] = torch.zeros_like(grad)
+                    state['exp_avg_sq'] = torch.zeros_like(grad)
                     state['GG'] = [torch.zeros(d, d, device=grad.device) for d in grad.shape] # Will hold all the preconditioner matrices (L and R in the paper).
                     state['Q'] = [torch.linalg.eigh(m)[1].flip(1) for m in state['GG']] # start with exact orthogonalization using eigh
                     continue # first step is skipped so that we never use the current gradients in the projection.
@@ -54,7 +54,7 @@ class SOAP(torch.optim.Optimizer):
 
                 # Decay the first and second moment running average coefficient
                 # In-place operations to update the averages at the same time
-                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
                 exp_avg.lerp_(grad, 1-beta1)
                 exp_avg_sq.lerp_(grad_projected.square(), 1-beta2)
 
@@ -62,13 +62,12 @@ class SOAP(torch.optim.Optimizer):
                 # i.e. projecting to the eigenbases of matrices in state['GG']
                 exp_avg_projected = self.project(exp_avg, state)
 
-                # Projecting back the preconditioned (by Adam) exponential moving average of gradients
-                # to the original space
+                # Projecting back the preconditioned (by Adam) exponential moving average of gradients to the original space
                 adam_update = exp_avg_projected / (exp_avg_sq.sqrt() + group['eps'])
                 update = self.project_back(adam_update, state)
 
-                bias_correction1 = 1 - beta1**state["step"]
-                bias_correction2 = 1 - beta2**state["step"]
+                bias_correction1 = 1 - beta1**state['step']
+                bias_correction2 = 1 - beta2**state['step']
                 step_size = group['lr'] * bias_correction2**0.5 / bias_correction1
                 p.data.add_(update, alpha=-step_size)
 
