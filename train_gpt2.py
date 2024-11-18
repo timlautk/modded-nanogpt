@@ -106,7 +106,7 @@ class SOAP(torch.optim.Optimizer):
             followed by torch.linalg.qr decomposition.
             """
             exp_avg_sq = state['exp_avg_sq']
-            for i in range(2):
+            for i in [0, 1]:
                 m = state['GG'][i]
                 o = state['Q'][i]
                 est_eig = torch.diag(o.T @ m @ o)
