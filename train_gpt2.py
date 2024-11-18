@@ -64,8 +64,7 @@ class SOAP(torch.optim.Optimizer):
 
                 # Projecting back the preconditioned (by Adam) exponential moving average of gradients
                 # to the original space
-                denom = exp_avg_sq.sqrt().add_(group["eps"])
-                adam_update = exp_avg_projected / denom
+                adam_update = exp_avg_projected / (exp_avg_sq.sqrt() + group['eps'])
                 update = self.project_back(adam_update, state)
 
                 bias_correction1 = 1 - beta1**state["step"]
