@@ -20,9 +20,9 @@ class SOAP(torch.optim.Optimizer):
         precondition_frequency (`int`, *optional*, defaults to 10):
             How often to update the preconditioner.
     """
-    def __init__(self, params, lr=3e-3, betas=(0.95, 0.95), shampoo_beta=-1, eps=1e-8,
-                 precondition_frequency=10):
-        if shampoo_beta == -1:
+    def __init__(self, params, lr=3e-3, betas=(0.95, 0.95), eps=1e-8,
+                 shampoo_beta=None, precondition_frequency=10):
+        if shampoo_beta is None:
             shampoo_beta = betas[1]
         defaults = dict(lr=lr, betas=betas, shampoo_beta=shampoo_beta, eps=eps,
                         precondition_frequency=precondition_frequency)
