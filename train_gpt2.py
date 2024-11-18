@@ -19,15 +19,11 @@ class SOAP(torch.optim.Optimizer):
             Adam's epsilon for numerical stability.
         precondition_frequency (`int`, *optional*, defaults to 10):
             How often to update the preconditioner.
-        normalize_grads (`bool`, *optional*, defaults to `False`):
-            Whether or not to normalize gradients per layer.
-            Helps at large precondition_frequency (~100 in our experiments),
-            but hurts performance at small precondition_frequency (~10 in our experiments).
     """
     def __init__(self, params, lr=3e-3, betas=(0.95, 0.95), shampoo_beta=-1, eps=1e-8,
-                 precondition_frequency=10, normalize_grads=False):
+                 precondition_frequency=10):
         defaults = dict(lr=lr, betas=betas, shampoo_beta=shampoo_beta, eps=eps,
-                        precondition_frequency=precondition_frequency, normalize_grads=normalize_grads)
+                        precondition_frequency=precondition_frequency)
         super().__init__(params, defaults)
 
     def step(self):
@@ -76,8 +72,6 @@ class SOAP(torch.optim.Optimizer):
                 bias_correction1 = 1 - beta1**state["step"]
                 bias_correction2 = 1 - beta2**state["step"]
                 step_size = step_size * bias_correction2**0.5 / bias_correction1
-                if group["normalize_grads"]:
-                    norm_grad = norm_grad / (1e-30+norm_grad.square().mean().sqrt())
                 p.data.add_(norm_grad, alpha=-step_size)
 
                 # Update is done after the gradient step to avoid using current gradients in the projection.
