@@ -109,11 +109,10 @@ class SOAP(torch.optim.Optimizer):
             for i in [0, 1]:
                 m = state['GG'][i]
                 o = state['Q'][i]
-                sort_idx = torch.argsort((o.T @ m @ o).diag(), descending=True)
-                o = o[:, sort_idx]
-                power_iter = m @ o
-                Q, _ = torch.linalg.qr(power_iter)
+                est_evals = (o.T @ m @ o).diag()
+                sort_idx = torch.argsort(est_evals, descending=True)
                 exp_avg_sq[:] = exp_avg_sq.index_select(i, sort_idx)
+                Q, _ = torch.linalg.qr(m @ o[:, sort_idx])
                 state['Q'][i] = Q
 
 import os
