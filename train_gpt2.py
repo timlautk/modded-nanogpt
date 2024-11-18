@@ -109,8 +109,7 @@ class SOAP(torch.optim.Optimizer):
             for i in [0, 1]:
                 m = state['GG'][i]
                 o = state['Q'][i]
-                est_eig = torch.diag(o.T @ m @ o)
-                sort_idx = torch.argsort(est_eig, descending=True)
+                sort_idx = torch.argsort((o.T @ m @ o).diag(), descending=True)
                 o = o[:, sort_idx]
                 power_iter = m @ o
                 Q, _ = torch.linalg.qr(power_iter)
